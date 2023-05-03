@@ -1,0 +1,17 @@
+[package]
+name = "exTyS"
+authors = ["Lukas Seidel"]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/pr0me/exTyS"
+description = "Post-Processing tool for Joern slices, extracting type information for the use in ML models"
+
+[profile.release]
+incremental = true
+
+[dependencies]
+clap = { version = "4.2.7", features = ["derive"] }
+glob = "0.3.1"
+serde_json = "1.0.96"
