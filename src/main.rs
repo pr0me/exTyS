@@ -1,5 +1,7 @@
+pub mod slice_structs;
 pub mod utils;
 
+use crate::slice_structs::ObjSlice;
 use clap::Parser;
 use glob::glob;
 use serde_json;
@@ -38,29 +40,14 @@ struct Args {
     top_n_classes: u16,
 }
 
-#[derive(Debug)]
-struct Call {
-    name: String,
-    receiver: Option<String>,
-}
-
-#[derive(Debug)]
-struct Slice {
-    name: String,
-    scope: String,
-    type_name: String,
-    invoked_calls: Vec<Call>,
-    arg_to_methods: Vec<Call>,
-}
-
-fn import_slices(args: Args) -> Vec<Slice> {
+fn import_slices(args: Args) -> Vec<ObjSlice> {
     let mut slice_candidates = Vec::new();
     let mut num_scopes: u32 = 0;
     let mut num_obj: u32 = 0;
     let mut num_files: u32 = 0;
 
     println!(
-        "[*] Processing slice file from '{}'. This might take a while...",
+        "[*] Processing slices from '{}'. This might take a while...",
         args.slices
     );
     let t0 = Instant::now();
@@ -70,10 +57,6 @@ fn import_slices(args: Args) -> Vec<Slice> {
         .expect("Failed to read provided slice path as glob pattern")
     {
         if let Ok(path) = entry {
-            // let mut file = File::open(path).unwrap();
-            // let mut contents = String::new();
-            // file.read_to_string(&mut buf).unwrap();
-
             let file = File::open(path).unwrap();
             let mut buf_reader = BufReader::new(file);
             let mut contents = String::new();
@@ -83,37 +66,37 @@ fn import_slices(args: Args) -> Vec<Slice> {
             }
 
             // parse slice file as json
-            let curr_slice_json: serde_json::Value =
+            let curr_slice_json: slice_structs::FullSlice =
                 serde_json::from_str(&contents).expect("Failed to parse JSON file");
-            let object_slices = curr_slice_json["objectSlices"].as_object().unwrap();
+            // let object_slices = curr_slice_json["objectSlices"].as_object().unwrap();
             num_files += 1;
 
             // iterate over scopes in file
-            for (scope, vars) in object_slices {
+            for (scope, vars) in curr_slice_json.object_slices {
                 num_scopes += 1;
 
                 // iterate over objects in scope
-                for curr_obj in vars.as_array().unwrap() {
+                for curr_obj in vars {
                     num_obj += 1;
 
-                    let invoked_calls_arr = curr_obj["invokedCalls"].as_array().unwrap();
-                    let arg_to_calls_arr = curr_obj["argToCalls"].as_array().unwrap();
-                    let mut curr_type_name =
-                        curr_obj["targetObj"]["typeFullName"].as_str().unwrap();
+                    let mut curr_type_name = curr_obj.target_obj.type_full_name;
 
                     if curr_type_name.is_empty()
-                        || invoked_calls_arr.len() + arg_to_calls_arr.len()
-                            < args.usage_lower_bound as usize
                         || curr_type_name.contains("=>")
                         || curr_type_name.contains("{")
                     {
                         continue;
                     }
 
+                    if curr_obj.invoked_calls.len() + curr_obj.arg_to_calls.len()
+                        < args.usage_lower_bound as usize
+                    {
+                        continue;
+                    }
+
                     if curr_type_name.eq("ANY") {
-                        if arg_to_calls_arr.len() != 0 {
-                            let maybe_init_call =
-                                arg_to_calls_arr[0][0]["callName"].as_str().unwrap();
+                        if curr_obj.arg_to_calls.len() != 0 {
+                            let maybe_init_call = &curr_obj.arg_to_calls[0].0.call_name;
 
                             if maybe_init_call.contains(" = new ") {
                                 let recovered_type = maybe_init_call
@@ -122,7 +105,7 @@ fn import_slices(args: Args) -> Vec<Slice> {
                                     .last()
                                     .copied()
                                     .unwrap();
-                                curr_type_name = recovered_type;
+                                curr_type_name = recovered_type.to_string();
                             } else {
                                 continue;
                             }
@@ -131,30 +114,13 @@ fn import_slices(args: Args) -> Vec<Slice> {
                         }
                     }
 
-                    let mut curr_slice = Slice {
-                        name: curr_obj["targetObj"]["name"].as_str().unwrap().to_string(),
+                    let curr_slice = slice_structs::ObjSlice {
+                        name: curr_obj.target_obj.name,
                         scope: scope.to_string(),
                         type_name: curr_type_name.to_string(),
-                        invoked_calls: Vec::new(),
-                        arg_to_methods: Vec::new(),
+                        invoked_calls: curr_obj.invoked_calls,
+                        arg_to_methods: curr_obj.arg_to_calls,
                     };
-
-                    for call in invoked_calls_arr {
-                        let call_name = call["callName"].as_str().unwrap();
-                        curr_slice.invoked_calls.push(Call {
-                            name: call_name.to_string(),
-                            receiver: None,
-                        });
-                    }
-
-                    for call in arg_to_calls_arr {
-                        let call_name = call[0]["callName"].as_str().unwrap();
-                        let call_receiver = call[0]["receiver"].as_str();
-                        curr_slice.invoked_calls.push(Call {
-                            name: call_name.to_string(),
-                            receiver: call_receiver.map(|s| s.to_string()),
-                        });
-                    }
 
                     // println!("Slice: {:?}\n", curr_slice);
                     slice_candidates.push(curr_slice);

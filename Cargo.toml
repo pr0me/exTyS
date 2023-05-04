@@ -14,4 +14,5 @@ incremental = true
 [dependencies]
 clap = { version = "4.2.7", features = ["derive"] }
 glob = "0.3.1"
+serde = { version = "1.0.160", features = ["derive"] }
 serde_json = "1.0.96"
