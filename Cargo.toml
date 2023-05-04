@@ -1,5 +1,5 @@
 [package]
-name = "exTyS"
+name = "extys"
 authors = ["Lukas Seidel"]
 version = "0.1.0"
 edition = "2021"
