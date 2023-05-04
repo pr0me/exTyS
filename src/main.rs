@@ -6,7 +6,7 @@ use clap::Parser;
 use glob::glob;
 use serde_json;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::Read;
 use std::time::Instant;
 
 #[derive(Parser, Debug)]
@@ -57,19 +57,16 @@ fn import_slices(args: Args) -> Vec<ObjSlice> {
         .expect("Failed to read provided slice path as glob pattern")
     {
         if let Ok(path) = entry {
-            let file = File::open(path).unwrap();
-            let mut buf_reader = BufReader::new(file);
-            let mut contents = String::new();
-            buf_reader.read_to_string(&mut contents).unwrap();
-            if contents.len() < 1 {
+            let mut c = String::new();
+            File::open(path).unwrap().read_to_string(&mut c).unwrap();
+            if c.is_empty() {
                 continue;
             }
+            num_files += 1;
 
             // parse slice file as json
             let curr_slice_json: slice_structs::FullSlice =
-                serde_json::from_str(&contents).expect("Failed to parse JSON file");
-            // let object_slices = curr_slice_json["objectSlices"].as_object().unwrap();
-            num_files += 1;
+                serde_json::from_str(&c).expect("Failed to parse JSON file");
 
             // iterate over scopes in file
             for (scope, vars) in curr_slice_json.object_slices {
@@ -82,14 +79,10 @@ fn import_slices(args: Args) -> Vec<ObjSlice> {
                     let mut curr_type_name = curr_obj.target_obj.type_full_name;
 
                     if curr_type_name.is_empty()
+                        || curr_obj.invoked_calls.len() + curr_obj.arg_to_calls.len()
+                            < args.usage_lower_bound as usize
                         || curr_type_name.contains("=>")
                         || curr_type_name.contains("{")
-                    {
-                        continue;
-                    }
-
-                    if curr_obj.invoked_calls.len() + curr_obj.arg_to_calls.len()
-                        < args.usage_lower_bound as usize
                     {
                         continue;
                     }
