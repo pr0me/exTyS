@@ -33,7 +33,11 @@ pub fn benchmark_string_matchers() -> std::io::Result<()> {
             std::hint::black_box(m);
         }
     }
-    println!("regex:        {:4} μs\nmemmem:       {:4} μs", t1, t0.elapsed().as_micros());
+    println!(
+        "regex:        {:4} μs\nmemmem:       {:4} μs",
+        t1,
+        t0.elapsed().as_micros()
+    );
 
     lazy_static! {
         static ref RE_SET: regex::RegexSet = regex::RegexSet::new(&["=", "\n"]).unwrap();

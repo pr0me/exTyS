@@ -13,6 +13,7 @@ use crate::slice_structs::ObjSlice;
 use clap::Parser;
 use glob::glob;
 use indicatif::ProgressBar;
+use itertools::Itertools;
 use memchr::memmem;
 use serde_json;
 use std::fs::File;
@@ -175,14 +176,19 @@ fn import_slices(args: &Args) -> Vec<ObjSlice> {
 /// Performs filtering, denoising and vectorization of slices and its field
 fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
     println!("[*] Begin Vectorizing Slices");
+    let t0 = Instant::now();
 
+    let parser = utils::Parser::new();
     let mut candidates: Vec<ObjSlice> = Vec::new();
 
     let finder_colon = memmem::Finder::new(":");
 
-    let t0 = Instant::now();
     let bar = ProgressBar::new(slices.len() as _);
     for mut curr_slice in slices {
+        if let Some(i) = finder_colon.find(curr_slice.name.as_bytes()) {
+            curr_slice.name = curr_slice.name[..i].to_string();
+        }
+
         let mut arg_tos: Vec<String> = Vec::with_capacity(curr_slice.arg_to_calls.len());
         for c in curr_slice.arg_to_calls {
             let mut curr_call = c.0;
@@ -192,13 +198,23 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
                     curr_call.call_name = format!("{}.{}", recv, curr_call.call_name);
                 }
             }
-            println!("{}", curr_call.call_name);
-            arg_tos.push(curr_call.call_name);
+            if let Some(call_name) = utils::filter_method_name(&parser, &curr_call.call_name) {
+                // println!("{}", call_name);
+                arg_tos.push(call_name);
+            } else {
+                // println!("skipped {}", curr_call.call_name);
+            }
         }
+        arg_tos = arg_tos.into_iter().unique().collect();
 
         bar.inc(1);
     }
     bar.finish();
+
+    println!(
+        "[*] Finished Vectorizing Slices in {:.2}sec",
+        t0.elapsed().as_secs_f32()
+    );
 
     // utils::persist_to_disk(candidates);
 }
