@@ -4,11 +4,12 @@ pub mod utils;
 use crate::slice_structs::ObjSlice;
 use clap::Parser;
 use glob::glob;
+use indicatif::ProgressBar;
+use memchr::memmem;
 use serde_json;
 use std::fs::File;
 use std::io::Read;
 use std::time::Instant;
-use memchr::memmem;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -41,88 +42,101 @@ struct Args {
     top_n_classes: u16,
 }
 
-fn import_slices(args: Args) -> Vec<ObjSlice> {
+fn import_slices(args: &Args) -> Vec<ObjSlice> {
     let mut slice_candidates = Vec::new();
     let mut num_scopes: u32 = 0;
     let mut num_obj: u32 = 0;
-    let mut num_files: u32 = 0;
 
-    println!(
-        "[*] Processing slices from '{}'. This might take a while...",
-        args.slices
-    );
+    println!("[*] Processing slices from '{}'.", args.slices);
     let t0 = Instant::now();
 
     let finder_lambda = memmem::Finder::new("=>");
     let finder_struct = memmem::Finder::new("{");
     let finder_init = memmem::Finder::new(" = new ");
 
-    // iterate over slice files
+    let mut paths: Vec<std::path::PathBuf> = Vec::with_capacity(300_000);
     for entry in glob(&format!("{}/**/*.json", args.slices))
         .expect("Failed to read provided slice path as glob pattern")
     {
-        if let Ok(path) = entry {
-            let mut c = String::new();
-            File::open(path).unwrap().read_to_string(&mut c).unwrap();
-            if c.is_empty() {
-                continue;
-            }
-            num_files += 1;
+        match entry {
+            Ok(path) => paths.push(path),
+            Err(e) => println!("{:?}", e),
+        }
+    }
 
-            // parse slice file as json
-            let curr_slice_json: slice_structs::FullSlice =
-                serde_json::from_str(&c).expect("Failed to parse JSON file");
+    let num_files = paths.len();
+    println!(
+        "[*] Found {} slice files. This might take a while...",
+        num_files
+    );
 
-            // iterate over scopes in file
-            for (scope, vars) in curr_slice_json.object_slices {
-                num_scopes += 1;
+    // iterate over slice files
+    let bar = ProgressBar::new(num_files as _);
+    for path in paths {
+        // println!("{:?}", path);
 
-                // iterate over objects in scope
-                for curr_obj in vars {
-                    num_obj += 1;
+        let mut c = String::new();
+        File::open(path).unwrap().read_to_string(&mut c).unwrap();
+        if c.is_empty() {
+            continue;
+        }
 
-                    let mut curr_type_name: &str = &curr_obj.target_obj.type_full_name;
+        // parse slice file as json
+        let curr_slice_json: slice_structs::FullSlice =
+            serde_json::from_str(&c).expect("Failed to parse JSON file");
 
-                    if curr_type_name.is_empty()
-                        || curr_obj.invoked_calls.len() + curr_obj.arg_to_calls.len()
-                            < args.usage_lower_bound as usize
-                        || finder_lambda.find(curr_type_name.as_bytes()).is_some()
-                        || finder_struct.find(curr_type_name.as_bytes()).is_some()
-                    {
-                        continue;
-                    }
+        // iterate over scopes in file
+        for (scope, vars) in curr_slice_json.object_slices {
+            num_scopes += 1;
 
-                    // try to recover type name from constructor call
-                    if curr_type_name.eq("ANY") {
-                        if curr_obj.arg_to_calls.len() != 0 {
-                            let maybe_init_call = &curr_obj.arg_to_calls[0].0.call_name;
+            // iterate over objects in scope
+            for curr_obj in vars {
+                num_obj += 1;
 
-                            let i = finder_init.find(maybe_init_call.as_bytes());
-                            if let Some(i) = i {
-                                let recovered_type = &maybe_init_call[i + 7..];
-                                curr_type_name = recovered_type;
-                            } else {
-                                continue;
-                            }
+                let mut curr_type_name: &str = &curr_obj.target_obj.type_full_name;
+
+                if curr_type_name.is_empty()
+                    || curr_obj.invoked_calls.len() + curr_obj.arg_to_calls.len()
+                        < args.usage_lower_bound as usize
+                    || finder_lambda.find(curr_type_name.as_bytes()).is_some()
+                    || finder_struct.find(curr_type_name.as_bytes()).is_some()
+                {
+                    continue;
+                }
+
+                // try to recover type name from constructor call
+                if curr_type_name.eq("ANY") {
+                    if curr_obj.arg_to_calls.len() != 0 {
+                        let maybe_init_call = &curr_obj.arg_to_calls[0].0.call_name;
+
+                        let i = finder_init.find(maybe_init_call.as_bytes());
+                        if let Some(i) = i {
+                            let recovered_type = &maybe_init_call[i + 7..];
+                            curr_type_name = recovered_type;
                         } else {
                             continue;
                         }
+                    } else {
+                        continue;
                     }
-
-                    let curr_slice = slice_structs::ObjSlice {
-                        name: curr_obj.target_obj.name,
-                        scope: scope.to_string(),
-                        type_name: curr_type_name.to_string(),
-                        invoked_calls: curr_obj.invoked_calls,
-                        arg_to_methods: curr_obj.arg_to_calls,
-                    };
-
-                    // println!("Slice: {:?}\n", curr_slice);
-                    slice_candidates.push(curr_slice);
                 }
+
+                let curr_slice = slice_structs::ObjSlice {
+                    name: curr_obj.target_obj.name,
+                    scope: scope.to_string(),
+                    type_name: curr_type_name.to_string(),
+                    invoked_calls: curr_obj.invoked_calls,
+                    arg_to_calls: curr_obj.arg_to_calls,
+                };
+
+                // println!("Slice: {:?}\n", curr_slice);
+                slice_candidates.push(curr_slice);
             }
         }
+
+        bar.inc(1);
     }
+    bar.finish();
     println!(
         "[i] Importing slices took {:.3}s",
         t0.elapsed().as_secs_f32()
@@ -150,8 +164,40 @@ fn import_slices(args: Args) -> Vec<ObjSlice> {
     slice_candidates
 }
 
+/// Performs filtering, denoising and vectorization of slices and its field
+fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
+    println!("[*] Begin Vectorizing Slices");
+
+    let mut candidates: Vec<ObjSlice> = Vec::new();
+
+    let finder_colon = memmem::Finder::new(":");
+
+    let t0 = Instant::now();
+    let bar = ProgressBar::new(slices.len() as _);
+    for mut curr_slice in slices {
+        let mut arg_tos: Vec<String> = Vec::with_capacity(curr_slice.arg_to_calls.len());
+        for c in curr_slice.arg_to_calls {
+            let mut curr_call = c.0;
+
+            if let Some(recv) = curr_call.receiver {
+                if !(recv.eq("this") || recv.starts_with("_tmp_")) {
+                    curr_call.call_name = format!("{}.{}", recv, curr_call.call_name);
+                }
+            }
+            println!("{}", curr_call.call_name);
+            arg_tos.push(curr_call.call_name);
+        }
+
+        bar.inc(1);
+    }
+    bar.finish();
+
+    // utils::persist_to_disk(candidates);
+}
+
 fn main() {
     let args = Args::parse();
 
-    import_slices(args);
+    let imported_slices = import_slices(&args);
+    vectorize_slices(&args, imported_slices);
 }

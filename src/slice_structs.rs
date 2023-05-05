@@ -44,5 +44,5 @@ pub struct ObjSlice {
     pub scope: String,
     pub type_name: String,
     pub invoked_calls: Vec<Call>,
-    pub arg_to_methods: Vec<(Call, u16)>,
+    pub arg_to_calls: Vec<(Call, u16)>,
 }
