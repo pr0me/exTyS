@@ -8,6 +8,7 @@ use serde_json;
 use std::fs::File;
 use std::io::Read;
 use std::time::Instant;
+use memchr::memmem;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -52,6 +53,10 @@ fn import_slices(args: Args) -> Vec<ObjSlice> {
     );
     let t0 = Instant::now();
 
+    let finder_lambda = memmem::Finder::new("=>");
+    let finder_struct = memmem::Finder::new("{");
+    let finder_init = memmem::Finder::new(" = new ");
+
     // iterate over slice files
     for entry in glob(&format!("{}/**/*.json", args.slices))
         .expect("Failed to read provided slice path as glob pattern")
@@ -76,29 +81,26 @@ fn import_slices(args: Args) -> Vec<ObjSlice> {
                 for curr_obj in vars {
                     num_obj += 1;
 
-                    let mut curr_type_name = curr_obj.target_obj.type_full_name;
+                    let mut curr_type_name: &str = &curr_obj.target_obj.type_full_name;
 
                     if curr_type_name.is_empty()
                         || curr_obj.invoked_calls.len() + curr_obj.arg_to_calls.len()
                             < args.usage_lower_bound as usize
-                        || curr_type_name.contains("=>")
-                        || curr_type_name.contains("{")
+                        || finder_lambda.find(curr_type_name.as_bytes()).is_some()
+                        || finder_struct.find(curr_type_name.as_bytes()).is_some()
                     {
                         continue;
                     }
 
+                    // try to recover type name from constructor call
                     if curr_type_name.eq("ANY") {
                         if curr_obj.arg_to_calls.len() != 0 {
                             let maybe_init_call = &curr_obj.arg_to_calls[0].0.call_name;
 
-                            if maybe_init_call.contains(" = new ") {
-                                let recovered_type = maybe_init_call
-                                    .split(" = new ")
-                                    .collect::<Vec<&str>>()
-                                    .last()
-                                    .copied()
-                                    .unwrap();
-                                curr_type_name = recovered_type.to_string();
+                            let i = finder_init.find(maybe_init_call.as_bytes());
+                            if let Some(i) = i {
+                                let recovered_type = &maybe_init_call[i + 7..];
+                                curr_type_name = recovered_type;
                             } else {
                                 continue;
                             }
@@ -152,6 +154,4 @@ fn main() {
     let args = Args::parse();
 
     import_slices(args);
-
-    println!("Hello, world!");
 }
