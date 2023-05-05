@@ -10,3 +10,8 @@ And then run on the directory containing the slice `.json`s:
 ```
 ./target/release/extys --slices ./ti_datasets/v3/slices/
 ```
+
+Run tests (benchmarks) with
+```
+cargo test -- --nocapture
+```

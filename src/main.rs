@@ -1,3 +1,11 @@
+#![feature(test)]
+
+#[cfg(test)]
+#[macro_use]
+extern crate lazy_static;
+
+#[cfg(test)]
+pub mod bench;
 pub mod slice_structs;
 pub mod utils;
 
