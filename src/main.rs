@@ -36,11 +36,11 @@ struct Args {
     language: String,
 
     /// Number of how many observations an object needs to be considered
-    #[arg(long, default_value_t = 1)]
-    usage_lower_bound: u16,
+    #[arg(short, long, default_value_t = 1)]
+    lower_usage_bound: usize,
     /// Number of how many observations an object may have before it is being split
-    #[arg(long, default_value_t = 8)]
-    usage_upper_bound: u16,
+    #[arg(short, long, default_value_t = 8)]
+    upper_usage_bound: usize,
 
     /// Number of observations per class we require to be present in the dataset
     #[arg(short, long, default_value_t = 3)]
@@ -106,7 +106,7 @@ fn import_slices(args: &Args) -> Vec<ObjSlice> {
 
                 if curr_type_name.is_empty()
                     || curr_obj.invoked_calls.len() + curr_obj.arg_to_calls.len()
-                        < args.usage_lower_bound as usize
+                        < args.lower_usage_bound as usize
                     || finder_lambda.find(curr_type_name.as_bytes()).is_some()
                     || finder_struct.find(curr_type_name.as_bytes()).is_some()
                 {
@@ -186,6 +186,13 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
             curr_slice.name = curr_slice.name[..i].to_string();
         }
 
+        let calls: Vec<String> = curr_slice
+            .invoked_calls
+            .into_iter()
+            .map(|c| c.call_name)
+            .unique()
+            .collect();
+
         let mut arg_tos: Vec<String> = Vec::with_capacity(curr_slice.arg_to_calls.len());
         for c in curr_slice.arg_to_calls {
             let curr_call = c.0;
@@ -197,16 +204,17 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
                     }
                 }
 
-                // if call_name.ne(&curr_call.call_name) {
-                //     println!("{} -> {}", curr_call.call_name, call_name);
-                // }
-
                 arg_tos.push(call_name);
             } else {
                 // println!("skipped {}", curr_call.call_name);
             }
         }
         arg_tos = arg_tos.into_iter().unique().collect();
+
+        let total_usages = calls.len() + arg_tos.len();
+        if total_usages >= args.lower_usage_bound {
+            let curr_type = utils::clean_type(&parser, &curr_slice.type_name);
+        }
 
         bar.inc(1);
     }
