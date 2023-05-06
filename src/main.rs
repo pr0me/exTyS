@@ -118,12 +118,9 @@ fn import_slices(args: &Args) -> Vec<ObjSlice> {
                     if curr_obj.arg_to_calls.len() != 0 {
                         let maybe_init_call = &curr_obj.arg_to_calls[0].0.call_name;
 
-                        let i = finder_init.find(maybe_init_call.as_bytes());
-                        if let Some(i) = i {
-                            let recovered_type = &maybe_init_call[i + 7..];
-                            curr_type_name = recovered_type;
-                        } else {
-                            continue;
+                        match finder_init.find(maybe_init_call.as_bytes()) {
+                            Some(i) => curr_type_name = &maybe_init_call[i + 7..],
+                            None => continue,
                         }
                     } else {
                         continue;
@@ -191,15 +188,19 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
 
         let mut arg_tos: Vec<String> = Vec::with_capacity(curr_slice.arg_to_calls.len());
         for c in curr_slice.arg_to_calls {
-            let mut curr_call = c.0;
+            let curr_call = c.0;
 
-            if let Some(recv) = curr_call.receiver {
-                if !(recv.eq("this") || recv.starts_with("_tmp_")) {
-                    curr_call.call_name = format!("{}.{}", recv, curr_call.call_name);
+            if let Some(mut call_name) = utils::clean_method_name(&parser, &curr_call.call_name) {
+                if let Some(recv) = curr_call.receiver {
+                    if !(recv.eq("this") || recv.starts_with("_tmp_") || recv.eq("_")) {
+                        call_name = format!("{}.{}", recv, call_name);
+                    }
                 }
-            }
-            if let Some(call_name) = utils::filter_method_name(&parser, &curr_call.call_name) {
-                // println!("{}", call_name);
+
+                // if call_name.ne(&curr_call.call_name) {
+                //     println!("{} -> {}", curr_call.call_name, call_name);
+                // }
+
                 arg_tos.push(call_name);
             } else {
                 // println!("skipped {}", curr_call.call_name);
