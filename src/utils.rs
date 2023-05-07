@@ -12,6 +12,7 @@ pub struct Parser<'a> {
     pub finder_newline: memmem::Finder<'a>,
     pub finder_pipe: memmem::Finder<'a>,
     pub finder_slash: memmem::Finder<'a>,
+    pub finder_colon: memmem::Finder<'a>,
     pub finder_curly_bracket: memmem::Finder<'a>,
     pub finder_square_bracket: memmem::Finder<'a>,
     pub finder_as: memmem::Finder<'a>,
@@ -31,6 +32,7 @@ impl Parser<'_> {
             finder_newline: memmem::Finder::new("\n"),
             finder_pipe: memmem::Finder::new("|"),
             finder_slash: memmem::Finder::new("/"),
+            finder_colon: memmem::Finder::new(":"),
             finder_curly_bracket: memmem::Finder::new("{"),
             finder_square_bracket: memmem::Finder::new("["),
             finder_as: memmem::Finder::new(" as "),
@@ -183,7 +185,7 @@ pub fn clean_method_name(parser: &Parser, mut name: &str) -> Option<String> {
     }
 }
 
-pub fn assemble(obj: &ObjSlice, calls: Vec<String>, arg_tos: Vec<String>) -> String {
+pub fn assemble(obj: &ObjSlice, calls: &Vec<String>, arg_tos: &Vec<String>) -> String {
     let call_names = if calls.len() > 0 {
         format!(" Calls: {}.", calls.join(", "))
     } else {

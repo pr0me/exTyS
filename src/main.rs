@@ -16,8 +16,10 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use memchr::memmem;
 use serde_json;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
+use std::iter::Sum;
 use std::time::Instant;
 
 #[derive(Parser, Debug)]
@@ -44,7 +46,7 @@ struct Args {
 
     /// Number of observations per class we require to be present in the dataset
     #[arg(short, long, default_value_t = 3)]
-    class_occurence_threshold: u16,
+    class_occurence_threshold: usize,
 
     /// If not 0, outputs a `top_n.json` file with the most common classes in the dataset
     #[arg(short, long, default_value_t = 0)]
@@ -176,13 +178,11 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
     let t0 = Instant::now();
 
     let parser = utils::Parser::new();
-    let mut candidates: Vec<ObjSlice> = Vec::new();
-
-    let finder_colon = memmem::Finder::new(":");
+    let mut candidates: Vec<(String, String, usize)> = Vec::new();
 
     let bar = ProgressBar::new(slices.len() as _);
     for mut curr_slice in slices {
-        if let Some(i) = finder_colon.find(curr_slice.name.as_bytes()) {
+        if let Some(i) = parser.finder_colon.find(curr_slice.name.as_bytes()) {
             curr_slice.name = curr_slice.name[..i].to_string();
         }
 
@@ -219,21 +219,72 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
             if total_usages > args.upper_usage_bound {
                 let splits = utils::generate_splits(calls, arg_tos, args.upper_usage_bound);
                 for s in splits {
-                    let feat_str = utils::assemble(&curr_slice, s.0, s.1);
+                    let feat_str = utils::assemble(&curr_slice, &(s.0), &(s.1));
+                    candidates.push((
+                        feat_str,
+                        curr_slice.type_name.to_owned(),
+                        s.0.len() + s.1.len(),
+                    ));
                 }
             } else {
-                let feat_str = utils::assemble(&curr_slice, calls, arg_tos);
-                // println!("{}", feat_str);
+                let feat_str = utils::assemble(&curr_slice, &calls, &arg_tos);
+                candidates.push((
+                    feat_str,
+                    curr_slice.type_name.to_owned(),
+                    calls.len() + arg_tos.len(),
+                ));
             }
         }
 
         bar.inc(1);
     }
     bar.finish();
+    let c_len = candidates.len();
+
+    println!("[*] Deduplication and Generation of Type Histograms");
+    let mut unq_candidates = candidates
+        .into_iter()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    let mut type_occurence_map: HashMap<String, usize> = HashMap::new();
+    for c in &unq_candidates {
+        let curr_type = c.1.to_owned();
+        type_occurence_map
+            .entry(curr_type)
+            .and_modify(|v| *v += 1)
+            .or_insert(0);
+    }
+
+    // remove features for types being too rare
+    unq_candidates
+        .retain(|c| type_occurence_map.get(&c.1).unwrap() > &args.class_occurence_threshold);
 
     println!(
         "[*] Finished Vectorizing Slices in {:.2}sec",
         t0.elapsed().as_secs_f32()
+    );
+
+    // generate stats
+    let type_set = unq_candidates
+        .into_iter()
+        .map(|c| c.1)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    let num_types = type_set.len();
+    let occ: Vec<usize> = type_set
+        .into_iter()
+        .map(|t| *type_occurence_map.get(&t).unwrap())
+        .collect();
+
+    println!("[i] Found {} unique classes", num_types);
+    println!(
+        "[i] Occurences per type:\n    - average: {:.2}\n    - median:  {} ",
+        occ.iter().sum::<usize>() as f32 / occ.len() as f32,
+        occ[occ.len() / 2]
     );
 
     // utils::persist_to_disk(candidates);
