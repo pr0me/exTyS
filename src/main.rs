@@ -214,6 +214,14 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
         let total_usages = calls.len() + arg_tos.len();
         if total_usages >= args.lower_usage_bound {
             let curr_type = utils::clean_type(&parser, &curr_slice.type_name);
+
+            if total_usages > args.upper_usage_bound {
+                println!("{},{}", calls.len(), arg_tos.len());
+                let splits = utils::generate_splits(calls, arg_tos, args.upper_usage_bound);
+                for s in splits {
+                    println!("{:?}", s);
+                }
+            }
         }
 
         bar.inc(1);

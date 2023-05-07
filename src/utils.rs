@@ -2,7 +2,9 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
-use crate::slice_structs::ObjSlice;
+use std::{cmp::min, num};
+
+use crate::slice_structs::{Call, ObjSlice};
 use memchr::memmem;
 
 pub struct Parser<'a> {
@@ -178,5 +180,72 @@ pub fn clean_method_name(parser: &Parser, mut name: &str) -> Option<String> {
         //     println!("{} -> {}", orig_name, name);
         // }
         Some(name.to_string())
+    }
+}
+
+pub fn generate_splits<T>(a: Vec<T>, b: Vec<T>, threshold: usize) -> Vec<(Vec<T>, Vec<T>)>
+where
+    T: Clone,
+{
+    let combined_length = a.len() + b.len();
+    if combined_length <= threshold {
+        vec![(a, b)]
+    } else {
+        // determine the number of tuples needed to split the lists
+        let num_tuples = (combined_length + threshold - 1) / threshold;
+
+        let a_len = a.len();
+        let b_len = b.len();
+
+        // determine the minimum number of elements needed from each list for each tuple
+        let mut min_len_a = a_len / num_tuples;
+        let mut min_len_b = b_len / num_tuples;
+
+        // adjust for cases where one list is smaller than the other
+        if a_len % num_tuples != 0 {
+            min_len_a += 1;
+        }
+        if b_len % num_tuples != 0 {
+            min_len_b += 1;
+        }
+
+        // split the lists into tuples
+        let mut splits: Vec<(Vec<T>, Vec<T>)> = Vec::new();
+        let mut a_start = 0;
+        let mut b_start = 0;
+        for _ in 0..num_tuples {
+            let a_end = min(a_start + min_len_a, a_len);
+            let b_end = min(b_start + min_len_b, b_len);
+            splits.push((a[a_start..a_end].to_vec(), b[b_start..b_end].to_vec()));
+            a_start = a_end;
+            b_start = b_end;
+        }
+
+        // re-use the first element of the smaller list if necessary
+        if a_len < num_tuples && a_len > 0 {
+            for i in a_len..num_tuples {
+                splits[i] = (a[0..1].to_vec(), (&splits[i].1).to_vec());
+            }
+        }
+        if b_len < num_tuples && b_len > 0 {
+            for i in b_len..num_tuples {
+                splits[i] = ((&splits[i].0).to_vec(), b[0..1].to_vec());
+            }
+        }
+
+        // make sure one element is the same for all tuples
+        if a_len > b_len {
+            let el = &a[0];
+            for i in 1..num_tuples {
+                splits[i].0.push(el.clone());
+            }
+        } else {
+            let el = &b[0];
+            for i in 1..num_tuples {
+                splits[i].1.push(el.clone());
+            }
+        }
+
+        splits
     }
 }

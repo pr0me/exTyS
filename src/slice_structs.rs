@@ -28,7 +28,7 @@ pub struct TargetObj {
     pub literal: bool,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Call {
     pub receiver: Option<String>,
