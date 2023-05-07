@@ -183,6 +183,25 @@ pub fn clean_method_name(parser: &Parser, mut name: &str) -> Option<String> {
     }
 }
 
+pub fn assemble(obj: &ObjSlice, calls: Vec<String>, arg_tos: Vec<String>) -> String {
+    let call_names = if calls.len() > 0 {
+        format!(" Calls: {}.", calls.join(", "))
+    } else {
+        "".to_string()
+    };
+
+    let arg_names = if arg_tos.len() > 0 {
+        format!(" Argument to: {}.", arg_tos.join(", "))
+    } else {
+        "".to_string()
+    };
+
+    format!(
+        "Variable: {}. Scope: {}.{}{}",
+        obj.name, obj.scope, call_names, arg_names
+    )
+}
+
 pub fn generate_splits<T>(a: Vec<T>, b: Vec<T>, threshold: usize) -> Vec<(Vec<T>, Vec<T>)>
 where
     T: Clone,

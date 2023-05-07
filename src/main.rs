@@ -188,17 +188,18 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
 
         let calls: Vec<String> = curr_slice
             .invoked_calls
+            .clone()
             .into_iter()
             .map(|c| c.call_name)
             .unique()
             .collect();
 
         let mut arg_tos: Vec<String> = Vec::with_capacity(curr_slice.arg_to_calls.len());
-        for c in curr_slice.arg_to_calls {
-            let curr_call = c.0;
+        for c in &curr_slice.arg_to_calls {
+            let curr_call = &c.0;
 
             if let Some(mut call_name) = utils::clean_method_name(&parser, &curr_call.call_name) {
-                if let Some(recv) = curr_call.receiver {
+                if let Some(recv) = &curr_call.receiver {
                     if !(recv.eq("this") || recv.starts_with("_tmp_") || recv.eq("_")) {
                         call_name = format!("{}.{}", recv, call_name);
                     }
@@ -213,14 +214,16 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
 
         let total_usages = calls.len() + arg_tos.len();
         if total_usages >= args.lower_usage_bound {
-            let curr_type = utils::clean_type(&parser, &curr_slice.type_name);
+            curr_slice.type_name = utils::clean_type(&parser, &curr_slice.type_name)[0].to_owned();
 
             if total_usages > args.upper_usage_bound {
-                println!("{},{}", calls.len(), arg_tos.len());
                 let splits = utils::generate_splits(calls, arg_tos, args.upper_usage_bound);
                 for s in splits {
-                    println!("{:?}", s);
+                    let feat_str = utils::assemble(&curr_slice, s.0, s.1);
                 }
+            } else {
+                let feat_str = utils::assemble(&curr_slice, calls, arg_tos);
+                // println!("{}", feat_str);
             }
         }
 
