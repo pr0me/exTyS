@@ -2,10 +2,12 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
-use std::{cmp::min, num};
-
 use crate::slice_structs::{Call, ObjSlice};
 use memchr::memmem;
+use std::fs;
+use std::fs::OpenOptions;
+use std::io::prelude::*;
+use std::{cmp::min, num};
 
 pub struct Parser<'a> {
     pub finder_eq: memmem::Finder<'a>,
@@ -46,8 +48,6 @@ impl Parser<'_> {
         }
     }
 }
-
-pub fn persist_to_disk(slices: Vec<ObjSlice>) {}
 
 /// Performs denoising on the type name and local resolution imports and returns multiple flattened types in case of a union
 #[inline(always)]
@@ -185,6 +185,7 @@ pub fn clean_method_name(parser: &Parser, mut name: &str) -> Option<String> {
     }
 }
 
+/// Create full feature vector from raw data in order to be fed into an LLM
 pub fn assemble(obj: &ObjSlice, calls: &Vec<String>, arg_tos: &Vec<String>) -> String {
     let call_names = if calls.len() > 0 {
         format!(" Calls: {};", calls.join(", "))
@@ -271,6 +272,7 @@ where
     }
 }
 
+/// Extract most relevant namespace from full scope path
 #[inline(always)]
 pub fn extract_func_name(full_qualified_name: &str) -> String {
     let nested_namespaces: Vec<&str> = full_qualified_name.split(':').collect();
@@ -285,4 +287,56 @@ pub fn extract_func_name(full_qualified_name: &str) -> String {
     } else {
         nested_namespaces[i].to_string()
     }
+}
+
+pub fn persist_to_disk(data: Vec<(String, String, usize)>) {
+    let t0 = std::time::Instant::now();
+
+    let mut features = Vec::with_capacity(data.len());
+    let mut labels = Vec::with_capacity(data.len());
+
+    for (a, b, _) in data.iter() {
+        features.push(format!("\"{}\"", a.to_owned()));
+        labels.push(format!("\"{}\"", b.to_owned()));
+    }
+
+    let feat_buf = features.join(",\n");
+    let label_buf = labels.join(",\n");
+
+    let mut feat_file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open("./feature_vec.json")
+        .expect("Failed to open feature file");
+    let mut label_file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open("./class_label_vec.json")
+        .expect("Failed to open label file");
+
+    feat_file
+        .write("[\n".as_bytes())
+        .expect("Failed to write preamble to feature file");
+    label_file
+        .write("[\n".as_bytes())
+        .expect("Failed to write preamble to label file");
+
+    feat_file
+        .write_all(feat_buf.as_bytes())
+        .expect("Failed to write data to feature file");
+    label_file
+        .write_all(label_buf.as_bytes())
+        .expect("Failed to write data to label file");
+
+    feat_file
+        .write("\n]".as_bytes())
+        .expect("Failed to write to feature file");
+    label_file
+        .write("\n]".as_bytes())
+        .expect("Failed to write to label file");
+
+    println!(
+        "[i] Persisting vectors to disk took {:.2} sec",
+        t0.elapsed().as_secs_f32()
+    );
 }
