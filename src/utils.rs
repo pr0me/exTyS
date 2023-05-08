@@ -186,7 +186,12 @@ pub fn clean_method_name(parser: &Parser, mut name: &str) -> Option<String> {
 }
 
 /// Create full feature vector from raw data in order to be fed into an LLM
-pub fn assemble(obj: &ObjSlice, calls: &Vec<String>, arg_tos: &Vec<String>) -> String {
+pub fn assemble(
+    obj: &ObjSlice,
+    calls: &Vec<String>,
+    arg_tos: &Vec<String>,
+    language: &Option<String>,
+) -> String {
     let call_names = if calls.len() > 0 {
         format!(" Calls: {};", calls.join(", "))
     } else {
@@ -199,9 +204,15 @@ pub fn assemble(obj: &ObjSlice, calls: &Vec<String>, arg_tos: &Vec<String>) -> S
         "".to_string()
     };
 
+    let lang = if let Some(l) = language {
+        format!(" Language: {};", l)
+    } else {
+        "".to_string()
+    };
+
     format!(
-        "Variable: {}; Scope: {};{}{}",
-        obj.name, obj.scope, call_names, arg_names
+        "{{Variable: {}; Scope: {};{}{}{}}}",
+        obj.name, obj.scope, call_names, arg_names, lang
     )
 }
 
@@ -282,10 +293,20 @@ pub fn extract_func_name(full_qualified_name: &str) -> String {
         i -= 1;
     }
 
-    if nested_namespaces.len() > 3 && i != 1 && nested_namespaces[i - 1].ne("program") {
-        format!("{}.{}", nested_namespaces[i - 1], nested_namespaces[i])
-    } else {
+    if !(nested_namespaces.len() > 3
+        && i != 1
+        && nested_namespaces[i - 1].ne("program")
+        && !nested_namespaces[i - 1].starts_with("anonymous")
+        && !nested_namespaces[i].starts_with("program"))
+    {
         nested_namespaces[i].to_string()
+    } else {
+        let ret = format!("{}.{}", nested_namespaces[i - 1], nested_namespaces[i]);
+        if ret.contains("program") || ret.contains("anonymous") {
+            println!("{}", full_qualified_name);
+            println!("{}", ret);
+        }
+        ret
     }
 }
 
@@ -334,6 +355,9 @@ pub fn persist_to_disk(data: Vec<(String, String, usize)>) {
     label_file
         .write("\n]".as_bytes())
         .expect("Failed to write to label file");
+
+    feat_file.sync_all().expect("Failed to flush feature file");
+    label_file.sync_all().expect("Failed to flush label file");
 
     println!(
         "[i] Persisting vectors to disk took {:.2} sec",

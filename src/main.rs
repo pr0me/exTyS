@@ -33,8 +33,8 @@ struct Args {
     output_dir: String,
 
     /// Language of the parsed Slices (typescript, python)
-    #[arg(short, long, default_value = "typescript")]
-    language: String,
+    #[arg(short, long)]
+    language: Option<String>,
 
     /// Number of how many observations an object needs to be considered
     #[arg(short, long, default_value_t = 1)]
@@ -220,7 +220,7 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
             if total_usages > args.upper_usage_bound {
                 let splits = utils::generate_splits(calls, arg_tos, args.upper_usage_bound);
                 for s in splits {
-                    let feat_str = utils::assemble(&curr_slice, &(s.0), &(s.1));
+                    let feat_str = utils::assemble(&curr_slice, &(s.0), &(s.1), &args.language);
                     candidates.push((
                         feat_str,
                         curr_slice.type_name.to_owned(),
@@ -228,7 +228,7 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
                     ));
                 }
             } else {
-                let feat_str = utils::assemble(&curr_slice, &calls, &arg_tos);
+                let feat_str = utils::assemble(&curr_slice, &calls, &arg_tos, &args.language);
                 candidates.push((
                     feat_str,
                     curr_slice.type_name.to_owned(),
