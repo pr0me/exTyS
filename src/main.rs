@@ -129,9 +129,10 @@ fn import_slices(args: &Args) -> Vec<ObjSlice> {
                     }
                 }
 
+                let func_name = utils::extract_func_name(&scope);
                 let curr_slice = slice_structs::ObjSlice {
                     name: curr_obj.target_obj.name,
-                    scope: scope.to_string(),
+                    scope: func_name,
                     type_name: curr_type_name.to_string(),
                     invoked_calls: curr_obj.invoked_calls,
                     arg_to_calls: curr_obj.arg_to_calls,
@@ -268,6 +269,7 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
 
     // generate stats
     let type_set = unq_candidates
+        .clone()
         .into_iter()
         .map(|c| c.1)
         .collect::<HashSet<_>>()
@@ -280,6 +282,10 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
         .map(|t| *type_occurence_map.get(&t).unwrap())
         .collect();
 
+    println!(
+        "[i] Using {} slice candidates after filtering",
+        unq_candidates.len()
+    );
     println!("[i] Found {} unique classes", num_types);
     println!(
         "[i] Occurences per type:\n    - average: {:.2}\n    - median:  {} ",

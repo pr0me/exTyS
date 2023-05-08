@@ -187,19 +187,19 @@ pub fn clean_method_name(parser: &Parser, mut name: &str) -> Option<String> {
 
 pub fn assemble(obj: &ObjSlice, calls: &Vec<String>, arg_tos: &Vec<String>) -> String {
     let call_names = if calls.len() > 0 {
-        format!(" Calls: {}.", calls.join(", "))
+        format!(" Calls: {};", calls.join(", "))
     } else {
         "".to_string()
     };
 
     let arg_names = if arg_tos.len() > 0 {
-        format!(" Argument to: {}.", arg_tos.join(", "))
+        format!(" Argument to: {};", arg_tos.join(", "))
     } else {
         "".to_string()
     };
 
     format!(
-        "Variable: {}. Scope: {}.{}{}",
+        "Variable: {}; Scope: {};{}{}",
         obj.name, obj.scope, call_names, arg_names
     )
 }
@@ -268,5 +268,21 @@ where
         }
 
         splits
+    }
+}
+
+#[inline(always)]
+pub fn extract_func_name(full_qualified_name: &str) -> String {
+    let nested_namespaces: Vec<&str> = full_qualified_name.split(':').collect();
+
+    let mut i = nested_namespaces.len() - 1;
+    while nested_namespaces[i].starts_with("anonymous") {
+        i -= 1;
+    }
+
+    if nested_namespaces.len() > 3 && i != 1 && nested_namespaces[i - 1].ne("program") {
+        format!("{}.{}", nested_namespaces[i - 1], nested_namespaces[i])
+    } else {
+        nested_namespaces[i].to_string()
     }
 }
