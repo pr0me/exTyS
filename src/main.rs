@@ -44,7 +44,7 @@ struct Args {
     upper_usage_bound: usize,
 
     /// Number of observations per class we require to be present in the dataset
-    #[arg(short, long, default_value_t = 4)]
+    #[arg(short, long, default_value_t = 8)]
     class_occurence_threshold: usize,
 
     /// If not 0, outputs a `top_n.json` file with the most common classes in the dataset

@@ -23,6 +23,7 @@ pub struct Parser<'a> {
     pub finder_recv_q: memmem::Finder<'a>,
     pub finder_union: memmem::Finder<'a>,
     pub finder_import: memmem::Finder<'a>,
+    pub finder_op_close: memmem::Finder<'a>,
     pub finder_angle_bracket_o: memmem::Finder<'a>,
     pub finder_angle_bracket_c: memmem::Finder<'a>,
 }
@@ -43,6 +44,7 @@ impl Parser<'_> {
             finder_recv_q: memmem::Finder::new(")?."),
             finder_union: memmem::Finder::new(" | "),
             finder_import: memmem::Finder::new(".ts::program:"),
+            finder_op_close: memmem::Finder::new(">."),
             finder_angle_bracket_o: memmem::Finder::new("<"),
             finder_angle_bracket_c: memmem::Finder::new(">"),
         }
@@ -156,8 +158,10 @@ pub fn clean_method_name(parser: &Parser, mut name: &str) -> Option<String> {
     } else {
         let orig_name = name.to_owned();
 
-        if name.starts_with("<operators>") {
-            name = &name[12..];
+        if name.starts_with("<operator") {
+            if let Some(i) = parser.finder_op_close.find(name.as_bytes()) {
+                name = &name[i + 2..];
+            }
         } else {
             // remove unnecessarily complex receivers
             if name.starts_with("(") {
@@ -232,6 +236,7 @@ pub fn assemble(
         "{{Variable: {}; Scope: {};{}{}{}}}",
         obj.name, obj.scope, call_names, arg_names, lang
     )
+    .replace("\"", "")
 }
 
 pub fn generate_splits<T>(a: Vec<T>, b: Vec<T>, threshold: usize) -> Vec<(Vec<T>, Vec<T>)>
