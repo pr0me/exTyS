@@ -100,12 +100,28 @@ pub fn clean_type(parser: &Parser, name: &str) -> Vec<String> {
                 }
 
                 new_name = format!("{}.{}", left_side.to_string(), right_side.to_string());
-            } else if let Some(i) = parser.finder_import.find(new_name.as_bytes()) {
-                new_name = format!(
-                    "{}.{}",
-                    new_name[..i].to_string(),
-                    new_name[i + 13..].to_string()
-                );
+            } else if let Some(i_ts) = parser.finder_import.find(new_name.as_bytes()) {
+                if let Some(i_col) = memmem::rfind(new_name.as_bytes(), ":".as_bytes()) {
+                    if let Some(i_slash) =
+                        memmem::rfind(new_name[..i_ts].as_bytes(), "/".as_bytes())
+                    {
+                        new_name = format!(
+                            "{}.{}",
+                            new_name[i_slash + 1..i_ts].to_string(),
+                            new_name[i_col + 1..].to_string()
+                        );
+                    } else {
+                        new_name = format!(
+                            "{}.{}",
+                            new_name[..i_ts].to_string(),
+                            new_name[i_col + 1..].to_string()
+                        );
+                    }
+                }
+            }
+
+            if let Some(prefix) = new_name.strip_suffix(":") {
+                new_name = prefix.to_string();
             }
 
             // if name.ne(&new_name) {
