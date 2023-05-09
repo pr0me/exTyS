@@ -62,6 +62,8 @@ pub fn clean_type(parser: &Parser, name: &str) -> Vec<String> {
     } else {
         if name.ends_with("[]") || name.starts_with("Array<") {
             new_name = "Array".to_string();
+        } else if name.starts_with("readonly ") {
+            new_name = "readonly".to_string();
         } else {
             // strip generics
             while let Some(i_o) = parser.finder_angle_bracket_o.find(new_name.as_bytes()) {
@@ -301,12 +303,7 @@ pub fn extract_func_name(full_qualified_name: &str) -> String {
     {
         nested_namespaces[i].to_string()
     } else {
-        let ret = format!("{}.{}", nested_namespaces[i - 1], nested_namespaces[i]);
-        if ret.contains("program") || ret.contains("anonymous") {
-            println!("{}", full_qualified_name);
-            println!("{}", ret);
-        }
-        ret
+        format!("{}.{}", nested_namespaces[i - 1], nested_namespaces[i])
     }
 }
 
