@@ -236,7 +236,7 @@ pub fn assemble(
         "{{Variable: {}; Scope: {};{}{}{}}}",
         obj.name, obj.scope, call_names, arg_names, lang
     )
-    .replace(&['\"', '\\', '\'', '\n', '\t'][..], "")
+    .replace(&['\"', '\\', '\'', '\n', '\t', '\r'][..], "")
 }
 
 pub fn generate_splits<T>(a: Vec<T>, b: Vec<T>, threshold: usize) -> Vec<(Vec<T>, Vec<T>)>
