@@ -141,7 +141,7 @@ pub fn clean_type(parser: &Parser, name: &str) -> Vec<String> {
     }
 
     new_name = new_name.trim().to_string();
-    [new_name].to_vec()
+    [new_name.replace(&['\"', '\\', '\'', '\n', '\t', '\r'][..], "")].to_vec()
 }
 
 #[inline(always)]
