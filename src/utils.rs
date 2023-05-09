@@ -236,7 +236,7 @@ pub fn assemble(
         "{{Variable: {}; Scope: {};{}{}{}}}",
         obj.name, obj.scope, call_names, arg_names, lang
     )
-    .replace("\"", "")
+    .replace(&['\"', '\\', '\''][..], "")
 }
 
 pub fn generate_splits<T>(a: Vec<T>, b: Vec<T>, threshold: usize) -> Vec<(Vec<T>, Vec<T>)>
@@ -312,7 +312,9 @@ pub fn extract_func_name(full_qualified_name: &str) -> String {
     let nested_namespaces: Vec<&str> = full_qualified_name.split(':').collect();
 
     let mut i = nested_namespaces.len() - 1;
-    while nested_namespaces[i].starts_with("anonymous") {
+    while nested_namespaces[i].starts_with("anonymous")
+        || memmem::find(nested_namespaces[i].as_bytes(), " ".as_bytes()).is_some()
+    {
         i -= 1;
     }
 
