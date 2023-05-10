@@ -16,6 +16,7 @@ use indicatif::ProgressBar;
 use itertools::Itertools;
 use memchr::memmem;
 use serde_json;
+use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
@@ -261,32 +262,86 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
     }
 
     unq_candidates.retain(|(_, class, _)| {
-        class_counts.get(class).unwrap_or(&0) > &args.class_occurence_threshold
+        class_counts.get(class).unwrap_or(&0) >= &args.class_occurence_threshold
     });
 
     // resize the vector while maintaining the distribution of observed classes
+    // TODO: optimize
     if let Some(n) = args.max_samples {
         let mut filtered_candidates = Vec::new();
-        let mut current_class_counts = HashMap::new();
-        let mut added_indices: HashSet<usize> = HashSet::new();
+        let mut count_vec: Vec<_> = class_counts.iter().collect();
+        count_vec.sort_by(|a, b| b.1.cmp(a.1));
 
-        while filtered_candidates.len() < n {
-            for (index, (feature, class, u)) in unq_candidates.iter().enumerate() {
-                let count = current_class_counts.entry(class).or_insert(0);
-                if *count <= *class_counts.get(class).unwrap() * n / unq_candidates.len()
-                    && !added_indices.contains(&index)
-                {
+        let cut_off = count_vec
+            .iter()
+            .position(|&c| c.1 < &args.class_occurence_threshold)
+            .unwrap();
+
+        let mut class_to_filtered_indices = HashMap::<&String, Vec<usize>>::new();
+        for (index, (_, class, _)) in unq_candidates.iter().enumerate() {
+            if class_counts.get(class).unwrap() >= &args.class_occurence_threshold {
+                class_to_filtered_indices
+                    .entry(class)
+                    .or_insert_with(Vec::new)
+                    .push(index);
+            }
+        }
+
+        for type_tuple in count_vec[..cut_off].iter().rev() {
+            let mut curr_count = 0;
+            let max_count = max(
+                *class_counts.get(type_tuple.0).unwrap() * n / unq_candidates.len(),
+                args.class_occurence_threshold,
+            );
+
+            if let Some(indices) = class_to_filtered_indices.get(type_tuple.0) {
+                for &index in indices {
+                    let (feature, class, u) = &unq_candidates[index];
                     filtered_candidates.push((feature.clone(), class.clone(), *u));
-                    *count += 1;
-                    added_indices.insert(index);
-                    if filtered_candidates.len() >= n {
+                    curr_count += 1;
+                    if curr_count > max_count || filtered_candidates.len() >= n {
                         break;
                     }
                 }
             }
+
+            if filtered_candidates.len() >= n {
+                break;
+            }
         }
 
+        // for type_tuple in &count_vec[..cut_off] {
+        //     let mut curr_count = 0;
+        //     for (feature, class, u) in unq_candidates.iter().filter(|c| c.1.eq(type_tuple.0)) {
+        //         filtered_candidates.push((feature.clone(), class.clone(), *u));
+        //         curr_count += 1;
+        //         if curr_count > *class_counts.get(type_tuple.0).unwrap() * n / unq_candidates.len()
+        //             || filtered_candidates.len() >= n
+        //         {
+        //             break;
+        //         }
+        //     }
+
+        //     if filtered_candidates.len() >= n {
+        //         break;
+        //     }
+        // }
+
         unq_candidates = filtered_candidates;
+
+        // double check we have no outliers in dataset
+        // let mut class_counts = HashMap::new();
+        // for (_, class, _) in &unq_candidates {
+        //     let curr_type = class.to_owned();
+        //     *class_counts.entry(curr_type).or_insert(0) += 1;
+        // }
+        // for (t, c) in class_counts {
+        //     if c < args.class_occurence_threshold {
+        //         if c < 4 {
+        //             println!("CRITICAL: {}::{}", t, c);
+        //         }
+        //     }
+        // }
     }
 
     println!(
