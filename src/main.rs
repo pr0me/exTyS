@@ -178,7 +178,7 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
     println!("[*] Begin Vectorizing Slices");
     let t0 = Instant::now();
 
-    let parser = utils::Parser::new();
+    let parser = utils::Parser::new(&args.language);
     let mut candidates: Vec<(String, String, usize)> = Vec::new();
 
     let bar = ProgressBar::new(slices.len() as _);

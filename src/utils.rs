@@ -29,7 +29,17 @@ pub struct Parser<'a> {
 }
 
 impl Parser<'_> {
-    pub fn new() -> Self {
+    pub fn new(lang: &Option<String>) -> Self {
+        let import_sep = if let Some(l) = lang {
+            if l.to_lowercase().eq("python") {
+                ".py:"
+            } else {
+                ".ts::program:"
+            }
+        } else {
+            ".ts::program:"
+        };
+
         Parser {
             finder_eq: memmem::Finder::new("="),
             finder_newline: memmem::Finder::new("\n"),
@@ -43,7 +53,7 @@ impl Parser<'_> {
             finder_recv: memmem::Finder::new(")."),
             finder_recv_q: memmem::Finder::new(")?."),
             finder_union: memmem::Finder::new(" | "),
-            finder_import: memmem::Finder::new(".ts::program:"),
+            finder_import: memmem::Finder::new(import_sep),
             finder_op_close: memmem::Finder::new(">."),
             finder_angle_bracket_o: memmem::Finder::new("<"),
             finder_angle_bracket_c: memmem::Finder::new(">"),
@@ -232,11 +242,19 @@ pub fn assemble(
         "".to_string()
     };
 
-    format!(
+    let mut feat_vec = format!(
         "{{Variable: {}; Scope: {};{}{}{}}}",
         obj.name, obj.scope, call_names, arg_names, lang
     )
-    .replace(&['\"', '\\', '\'', '\n', '\t', '\r'][..], "")
+    .replace(&['\"', '\\', '\'', '\n', '\t', '\r'][..], "");
+
+    if let Some(l) = language {
+        if l.to_lowercase().eq("python") {
+            feat_vec = feat_vec.replace("<module>.", "");
+        }
+    }
+
+    feat_vec
 }
 
 pub fn generate_splits<T>(a: Vec<T>, b: Vec<T>, threshold: usize) -> Vec<(Vec<T>, Vec<T>)>

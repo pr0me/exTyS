@@ -17,7 +17,7 @@ pub struct JsonObjSlice {
     pub target_obj: TargetObj,
     pub defined_by: serde_json::Value,
     pub invoked_calls: Vec<Call>,
-    pub arg_to_calls: Vec<(Call, u16)>,
+    pub arg_to_calls: Vec<(Call, i32)>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -44,5 +44,5 @@ pub struct ObjSlice {
     pub scope: String,
     pub type_name: String,
     pub invoked_calls: Vec<Call>,
-    pub arg_to_calls: Vec<(Call, u16)>,
+    pub arg_to_calls: Vec<(Call, i32)>,
 }
