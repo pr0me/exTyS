@@ -4,8 +4,7 @@
 
 use crate::slice_structs::{Call, ObjSlice};
 use memchr::memmem;
-use std::fs;
-use std::fs::OpenOptions;
+use std::fs::{self, File};
 use std::io::prelude::*;
 use std::{cmp::min, num};
 
@@ -362,16 +361,8 @@ pub fn persist_to_disk(data: Vec<(String, String, usize)>) {
     let feat_buf = features.join(",\n");
     let label_buf = labels.join(",\n");
 
-    let mut feat_file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open("./feature_vec.json")
-        .expect("Failed to open feature file");
-    let mut label_file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open("./class_label_vec.json")
-        .expect("Failed to open label file");
+    let mut feat_file = File::create("./feature_vec.json").expect("Failed to open feature file");
+    let mut label_file = File::create("./class_label_vec.json").expect("Failed to open label file");
 
     feat_file
         .write("[\n".as_bytes())

@@ -15,7 +15,6 @@ use glob::glob;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use memchr::memmem;
-use rand::{seq::IteratorRandom, thread_rng};
 use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -253,22 +252,41 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
         .into_iter()
         .collect::<Vec<_>>();
 
-    let mut type_occurence_map: HashMap<String, usize> = HashMap::new();
-    for c in &unq_candidates {
-        let curr_type = c.1.to_owned();
-        type_occurence_map
-            .entry(curr_type)
-            .and_modify(|v| *v += 1)
-            .or_insert(0);
+    let mut class_counts = HashMap::new();
+
+    // count occurrences of each class
+    for (_, class, _) in &unq_candidates {
+        let curr_type = class.to_owned();
+        *class_counts.entry(curr_type).or_insert(0) += 1;
     }
 
-    // remove features for types being too rare
-    unq_candidates
-        .retain(|c| type_occurence_map.get(&c.1).unwrap() > &args.class_occurence_threshold);
+    unq_candidates.retain(|(_, class, _)| {
+        class_counts.get(class).unwrap_or(&0) > &args.class_occurence_threshold
+    });
 
-    if let Some(max) = args.max_samples {
-        let mut rng = thread_rng();
-        unq_candidates = unq_candidates.into_iter().choose_multiple(&mut rng, max);
+    // resize the vector while maintaining the distribution of observed classes
+    if let Some(n) = args.max_samples {
+        let mut filtered_candidates = Vec::new();
+        let mut current_class_counts = HashMap::new();
+        let mut added_indices: HashSet<usize> = HashSet::new();
+
+        while filtered_candidates.len() < n {
+            for (index, (feature, class, u)) in unq_candidates.iter().enumerate() {
+                let count = current_class_counts.entry(class).or_insert(0);
+                if *count <= *class_counts.get(class).unwrap() * n / unq_candidates.len()
+                    && !added_indices.contains(&index)
+                {
+                    filtered_candidates.push((feature.clone(), class.clone(), *u));
+                    *count += 1;
+                    added_indices.insert(index);
+                    if filtered_candidates.len() >= n {
+                        break;
+                    }
+                }
+            }
+        }
+
+        unq_candidates = filtered_candidates;
     }
 
     println!(
@@ -288,7 +306,7 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
     let num_types = type_set.len();
     let occ: Vec<usize> = type_set
         .into_iter()
-        .map(|t| *type_occurence_map.get(&t).unwrap())
+        .map(|t| *class_counts.get(&t).unwrap())
         .collect();
 
     println!(
