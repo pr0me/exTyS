@@ -65,13 +65,16 @@ impl Parser<'_> {
 pub fn clean_type(parser: &Parser, name: &str) -> Vec<String> {
     let mut new_name = name.to_string();
 
-    if name.starts_with("<export>") {
+    if name.starts_with("<export") {
         match memmem::rfind(name.as_bytes(), "/".as_bytes()) {
             Some(i) => new_name = format!("<export>::{}", name[i + 1..].to_string()),
             None => {}
-        }
+        };
     } else {
-        if name.ends_with("[]") || name.starts_with("Array<") {
+        if name.ends_with("[]")
+            || name.starts_with("Array<")
+            || (name.starts_with("[") && name.ends_with("]"))
+        {
             new_name = "Array".to_string();
         } else if name.starts_with("readonly ") {
             new_name = "readonly".to_string();
@@ -135,22 +138,38 @@ pub fn clean_type(parser: &Parser, name: &str) -> Vec<String> {
                 new_name = prefix.to_string();
             }
 
+            // probably python specific
+            new_name = new_name.replace("..", ".");
+            new_name = new_name.replace(".__init__", "");
+
             // if name.ne(&new_name) {
             //     println!("{} -> {}", name, new_name);
-            // }
-
-            // let union_types = new_name.split(" | ");
-            // if parser.finder_union.find(new_name.as_bytes()).is_some() {
-            //     // println!("{}:::::::::::::::", name);
-            //     for t in union_types {
-            //         // println!("{}", t);
-            //     }
             // }
         }
     }
 
+    if let Some(i) = memmem::rfind(new_name.as_bytes(), ":".as_bytes()) {
+        new_name = new_name[i + 1..].to_string();
+    }
+
     new_name = new_name.trim().to_string();
-    [new_name.replace(&['\"', '\\', '\'', '\n', '\t', '\r'][..], "")].to_vec()
+
+    new_name = new_name.replace(&['\"', '\\', '\'', '\n', '\t', '\r', '(', ')', ','][..], "");
+
+    if new_name.ends_with("[]")
+        || new_name.starts_with("Array<")
+        || (new_name.starts_with("[") && new_name.ends_with("]"))
+    {
+        new_name = "Array".to_string();
+    } else if new_name.starts_with("__ecma.") {
+        if new_name.ends_with("Array") {
+            new_name = "Array".to_string();
+        } else if let Some(i) = parser.finder_colon.find(new_name.as_bytes()) {
+            new_name = new_name[..i].to_string();
+        }
+    }
+
+    vec![new_name]
 }
 
 #[inline(always)]
