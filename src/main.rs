@@ -41,7 +41,7 @@ struct Args {
     #[arg(short, long, default_value_t = 1)]
     lower_usage_bound: usize,
     /// Number of how many observations an object may have before it is being split
-    #[arg(short, long, default_value_t = 8)]
+    #[arg(short, long, default_value_t = 5)]
     upper_usage_bound: usize,
 
     /// Number of observations per class we require to be present in the dataset
@@ -265,8 +265,8 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
         class_counts.get(class).unwrap_or(&0) >= &args.class_occurence_threshold
     });
 
-    // resize the vector while maintaining the distribution of observed classes
     // TODO: optimize
+    // resize the vector while maintaining the distribution of observed classes
     if let Some(n) = args.max_samples {
         let mut filtered_candidates = Vec::new();
         let mut count_vec: Vec<_> = class_counts.iter().collect();
@@ -310,38 +310,7 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
             }
         }
 
-        // for type_tuple in &count_vec[..cut_off] {
-        //     let mut curr_count = 0;
-        //     for (feature, class, u) in unq_candidates.iter().filter(|c| c.1.eq(type_tuple.0)) {
-        //         filtered_candidates.push((feature.clone(), class.clone(), *u));
-        //         curr_count += 1;
-        //         if curr_count > *class_counts.get(type_tuple.0).unwrap() * n / unq_candidates.len()
-        //             || filtered_candidates.len() >= n
-        //         {
-        //             break;
-        //         }
-        //     }
-
-        //     if filtered_candidates.len() >= n {
-        //         break;
-        //     }
-        // }
-
         unq_candidates = filtered_candidates;
-
-        // double check we have no outliers in dataset
-        // let mut class_counts = HashMap::new();
-        // for (_, class, _) in &unq_candidates {
-        //     let curr_type = class.to_owned();
-        //     *class_counts.entry(curr_type).or_insert(0) += 1;
-        // }
-        // for (t, c) in class_counts {
-        //     if c < args.class_occurence_threshold {
-        //         if c < 4 {
-        //             println!("CRITICAL: {}::{}", t, c);
-        //         }
-        //     }
-        // }
     }
 
     println!(
@@ -359,10 +328,11 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
         .collect::<Vec<_>>();
 
     let num_types = type_set.len();
-    let occ: Vec<usize> = type_set
+    let mut occ: Vec<usize> = type_set
         .into_iter()
         .map(|t| *class_counts.get(&t).unwrap())
         .collect();
+    occ.sort();
 
     println!(
         "[i] Using {} slice candidates after filtering",

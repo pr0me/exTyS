@@ -243,25 +243,25 @@ pub fn assemble(
     language: &Option<String>,
 ) -> String {
     let call_names = if calls.len() > 0 {
-        format!(" Calls: {};", calls.join(", "))
+        format!(" Calls: {} ;", calls.join(", "))
     } else {
         "".to_string()
     };
 
     let arg_names = if arg_tos.len() > 0 {
-        format!(" Argument to: {};", arg_tos.join(", "))
+        format!(" Argument to: {} ;", arg_tos.join(", "))
     } else {
         "".to_string()
     };
 
     let lang = if let Some(l) = language {
-        format!(" Language: {};", l)
+        format!(" Language: {} ;", l)
     } else {
         "".to_string()
     };
 
     let mut feat_vec = format!(
-        "{{Variable: {}; Scope: {};{}{}{}}}",
+        "Variable: {} ; Scope: {} ;{}{}{}",
         obj.name, obj.scope, call_names, arg_names, lang
     )
     .replace(&['\"', '\\', '\'', '\n', '\t', '\r'][..], "");
