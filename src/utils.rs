@@ -172,6 +172,68 @@ pub fn clean_type(parser: &Parser, name: &str) -> Vec<String> {
     vec![new_name]
 }
 
+pub fn merge_common_types(usage_vectors: &mut Vec<(String, String, usize)>) {
+    println!("[*] Merging most common type synonyms");
+    let t0 = std::time::Instant::now();
+
+    for sample in usage_vectors.iter_mut() {
+        let curr_type_label = sample.1.to_owned();
+
+        if matches!(
+            curr_type_label.as_str(),
+            "__ecma.String" | "String" | "$String" | "types.__String"
+        ) || curr_type_label.starts_with("string | ")
+        {
+            sample.1 = "string".to_string();
+        } else if matches!(curr_type_label.as_str(), "__ecma.Number" | "Number")
+            || curr_type_label.starts_with("number | ")
+        {
+            sample.1 = "number".to_string();
+        } else if matches!(
+            curr_type_label.as_str(),
+            "__ecma.Boolean" | "boolean" | "Boolean" | "Bool" | "BOOLEAN"
+        ) {
+            sample.1 = "bool".to_string();
+        } else if matches!(
+            curr_type_label.as_str(),
+            "__ecma.Object"
+                | "object."
+                | "types.ObjectType"
+                | "ObjectType"
+                | "Object"
+                | "AnyObject"
+        ) || curr_type_label.ends_with(" | object")
+        {
+            sample.1 = "object".to_string();
+        } else if matches!(
+            curr_type_label.as_str(),
+            "__ecma.Null" | "Null" | "Nullable"
+        ) {
+            sample.1 = "null".to_string();
+        } else if matches!(curr_type_label.as_str(), "__ecma.Date" | "Date") {
+            sample.1 = "date".to_string();
+        } else if matches!(curr_type_label.as_str(), "__ecma.Set" | "Set") {
+            sample.1 = "set".to_string();
+        } else if matches!(
+            curr_type_label.as_str(),
+            "__ecma.Symbol" | "ts.Symbol" | "Symbol" | "types.Symbol"
+        ) {
+            sample.1 = "symbol".to_string();
+        } else if matches!(
+            curr_type_label.as_str(),
+            "__ecma.Map" | "map." | "Map" | "types.Map"
+        ) {
+            sample.1 = "map".to_string();
+        } else if matches!(curr_type_label.as_str(), "__ecma.Promise" | "Promise") {
+            sample.1 = "promise".to_string();
+        } else if matches!(curr_type_label.as_str(), "__ecma.Error" | "Error" | "ERROR") {
+            sample.1 = "error".to_string();
+        }
+    }
+
+    println!("[*] Merging took {:.2}s", t0.elapsed().as_secs_f32());
+}
+
 #[inline(always)]
 pub fn clean_method_name(parser: &Parser, mut name: &str) -> Option<String> {
     if name.is_empty()

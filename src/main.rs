@@ -313,6 +313,8 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
         unq_candidates = filtered_candidates;
     }
 
+    utils::merge_common_types(&mut unq_candidates);
+
     println!(
         "[*] Finished Vectorizing Slices in {:.2}sec",
         t0.elapsed().as_secs_f32()
