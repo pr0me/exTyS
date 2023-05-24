@@ -174,7 +174,6 @@ pub fn clean_type(parser: &Parser, name: &str) -> Vec<String> {
 
 pub fn merge_common_types(usage_vectors: &mut Vec<(String, String, usize)>) {
     println!("[*] Merging most common type synonyms");
-    let t0 = std::time::Instant::now();
 
     for sample in usage_vectors.iter_mut() {
         let curr_type_label = sample.1.to_owned();
@@ -230,8 +229,6 @@ pub fn merge_common_types(usage_vectors: &mut Vec<(String, String, usize)>) {
             sample.1 = "error".to_string();
         }
     }
-
-    println!("[*] Merging took {:.2}s", t0.elapsed().as_secs_f32());
 }
 
 #[inline(always)]
@@ -408,6 +405,8 @@ where
 #[inline(always)]
 pub fn extract_func_name(full_qualified_name: &str) -> String {
     let nested_namespaces: Vec<&str> = full_qualified_name.split(':').collect();
+    let file_path = nested_namespaces[0].split('/').collect::<Vec<&str>>();
+    let file_name = file_path.last().unwrap();
 
     let mut i = nested_namespaces.len() - 1;
     while nested_namespaces[i].starts_with("anonymous")
@@ -416,15 +415,23 @@ pub fn extract_func_name(full_qualified_name: &str) -> String {
         i -= 1;
     }
 
-    if !(nested_namespaces.len() > 3
+    if nested_namespaces[i].starts_with("program") {
+        format!("{}", file_name)
+    } else if !(nested_namespaces.len() > 3
         && i != 1
         && nested_namespaces[i - 1].ne("program")
         && !nested_namespaces[i - 1].starts_with("anonymous")
+        && !nested_namespaces[i - 1].starts_with("<init>")
         && !nested_namespaces[i].starts_with("program"))
     {
-        nested_namespaces[i].to_string()
+        format!("{}::{}", file_name, nested_namespaces[i].to_string())
     } else {
-        format!("{}.{}", nested_namespaces[i - 1], nested_namespaces[i])
+        format!(
+            "{}::{}::{}",
+            file_name,
+            nested_namespaces[i - 1],
+            nested_namespaces[i]
+        )
     }
 }
 

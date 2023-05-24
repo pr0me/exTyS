@@ -41,11 +41,11 @@ struct Args {
     #[arg(short, long, default_value_t = 1)]
     lower_usage_bound: usize,
     /// Number of how many observations an object may have before it is being split
-    #[arg(short, long, default_value_t = 5)]
+    #[arg(short, long, default_value_t = 8)]
     upper_usage_bound: usize,
 
     /// Number of observations per class we require to be present in the dataset
-    #[arg(short, long, default_value_t = 8)]
+    #[arg(short, long, default_value_t = 32)]
     class_occurence_threshold: usize,
 
     /// If not 0, outputs a `top_n.json` file with the most common classes in the dataset
@@ -70,7 +70,7 @@ fn import_slices(args: &Args) -> Vec<ObjSlice> {
     let finder_struct = memmem::Finder::new("{");
     let finder_init = memmem::Finder::new(" = new ");
 
-    let mut paths: Vec<std::path::PathBuf> = Vec::with_capacity(300_000);
+    let mut paths: Vec<std::path::PathBuf> = Vec::with_capacity(400_000);
     for entry in glob(&format!("{}/**/*.json", args.slices))
         .expect("Failed to read provided slice path as glob pattern")
     {
@@ -134,10 +134,10 @@ fn import_slices(args: &Args) -> Vec<ObjSlice> {
                     }
                 }
 
-                let func_name = utils::extract_func_name(&scope);
+                let func_scope = utils::extract_func_name(&scope);
                 let curr_slice = slice_structs::ObjSlice {
                     name: curr_obj.target_obj.name,
-                    scope: func_name,
+                    scope: func_scope,
                     type_name: curr_type_name.to_string(),
                     invoked_calls: curr_obj.invoked_calls,
                     arg_to_calls: curr_obj.arg_to_calls,
@@ -204,24 +204,31 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
         for c in &curr_slice.arg_to_calls {
             let curr_call = &c.0;
 
-            if let Some(mut call_name) = utils::clean_method_name(&parser, &curr_call.call_name) {
-                if let Some(recv) = &curr_call.receiver {
-                    if !(recv.eq("this") || recv.starts_with("_tmp_") || recv.eq("_")) {
-                        call_name = format!("{}.{}", recv, call_name);
-                    }
-                }
+            if let Some(call_name) = utils::clean_method_name(&parser, &curr_call.call_name) {
+                // if let Some(recv) = &curr_call.receiver {
+                //     if !(recv.eq("this") || recv.starts_with("_tmp_") || recv.eq("_")) {
+                //         call_name = format!("{}.{}", recv, call_name);
+                //     }
+                // }
 
                 arg_tos.push(call_name);
-            } else {
-                // println!("skipped {}", curr_call.call_name);
             }
         }
+
         arg_tos = arg_tos.into_iter().unique().collect();
+
+        // if we only observe a single assignment, this variable is not interesting
+        if calls.len() == 0 && arg_tos.len() == 1 {
+            if arg_tos[0].starts_with("assignment") {
+                continue;
+            }
+        }
 
         let total_usages = calls.len() + arg_tos.len();
         if total_usages >= args.lower_usage_bound {
             curr_slice.type_name = utils::clean_type(&parser, &curr_slice.type_name)[0].to_owned();
 
+            // generate multiple samples from one usage slice if it is too long
             if total_usages > args.upper_usage_bound {
                 let splits = utils::generate_splits(calls, arg_tos, args.upper_usage_bound);
                 for s in splits {
@@ -252,6 +259,8 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
         .collect::<HashSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
+
+    utils::merge_common_types(&mut unq_candidates);
 
     let mut class_counts = HashMap::new();
 
@@ -312,8 +321,6 @@ fn vectorize_slices(args: &Args, slices: Vec<ObjSlice>) {
 
         unq_candidates = filtered_candidates;
     }
-
-    utils::merge_common_types(&mut unq_candidates);
 
     println!(
         "[*] Finished Vectorizing Slices in {:.2}sec",
